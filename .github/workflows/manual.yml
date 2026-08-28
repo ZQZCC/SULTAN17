@@ -21,10 +21,10 @@ on:
         default: all
         options:
           - all
-          - ksu
           - ksu-susfs
-          - ksu-next
           - ksu-next-susfs
+          - ksu-susfs-nomount
+          - ksu-next-susfs-nomount
 
 jobs:
   matrix:
@@ -52,10 +52,10 @@ jobs:
 
           if [[ "$VARIANT" == "all" ]]; then
               VARIANTS=(
-                  ksu
                   ksu-susfs
-                  ksu-next
                   ksu-next-susfs
+                  ksu-susfs-nomount
+                  ksu-next-susfs-nomount
               )
           else
               VARIANTS=("$VARIANT")

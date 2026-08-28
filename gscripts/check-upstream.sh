@@ -60,6 +60,9 @@ cat >"$NOTES_FILE" <<EOF
 
 This build was triggered by upstream changes.
 
+Note: NoMount maybe fixed.
+
+
 EOF
 
 JSON_FILE="${TMP}/nightly.json"
@@ -99,6 +102,9 @@ IFS=$'\t' read -r NEW_NEXT NEXT_MSG \
 IFS=$'\t' read -r NEW_SUSFS SUSFS_MSG \
     < <(gitlab_commit_info "$SUSFS_REPO" "$SUSFS_BRANCH")
 
+IFS=$'\t' read -r NEW_NOMOUNT NOMOUNT_MSG \
+    < <(github_commit_info "$NOMOUNT_REPO" "$NOMOUNT_BRANCH" "kernel")
+
 NEW_SOURCE="$(git rev-parse HEAD)"
 SOURCE_MSG="$(git log -1 --pretty=%s)"
 
@@ -111,10 +117,10 @@ if [[ ! -f "${JSON_FILE}" ]]; then
     msg "First nightly run detected."
 
     BUILD_VARIANTS=(
-        ksu
         ksu-susfs
-        ksu-next
-        ksu-next-susfs
+		ksu-susfs-nomount
+		ksu-next-susfs
+		ksu-next-susfs-nomount
     )
 
 else
@@ -123,16 +129,17 @@ else
     OLD_KSU="$(jq -r '.kernelsu' "${JSON_FILE}")"
     OLD_NEXT="$(jq -r '.kernelsu_next' "${JSON_FILE}")"
     OLD_SUSFS="$(jq -r '.susfs' "${JSON_FILE}")"
+	OLD_NOMOUNT="$(jq -r '.nomount' "${JSON_FILE}")"
 
     BUILD_VARIANTS=()
 
 ### SOURCE
 if [[ "${OLD_SOURCE}" != "${NEW_SOURCE}" ]]; then
     BUILD_VARIANTS+=(
-        ksu
         ksu-susfs
-        ksu-next
         ksu-next-susfs
+		ksu-susfs-nomount
+		ksu-next-susfs-nomount
     )
 
     SHORT_SHA="${NEW_SOURCE:0:7}"
@@ -147,7 +154,7 @@ EOF
 
 ##KERNELSU
     if [[ "${OLD_KSU}" != "${NEW_KSU}" ]]; then
-        BUILD_VARIANTS+=(ksu ksu-susfs)
+        BUILD_VARIANTS+=(ksu-susfs)
 
         SHORT_SHA="${NEW_KSU:0:7}"
 
@@ -161,7 +168,7 @@ EOF
 
 ### KERNELSU-NEXT
     if [[ "${OLD_NEXT}" != "${NEW_NEXT}" ]]; then
-        BUILD_VARIANTS+=(ksu-next ksu-next-susfs)
+        BUILD_VARIANTS+=(ksu-next-susfs)
 
 	SHORT_SHA="${NEW_NEXT:0:7}"
 
@@ -183,6 +190,20 @@ cat >>"$NOTES_FILE" <<EOF
 ###SusFS
 
 - ${SHORT_SHA} — ${SUSFS_MSG}
+
+EOF
+    fi
+
+###SUSFS
+    if [[ "${OLD_NOMOUNT}" != "${NEW_NOMOUNT}" ]]; then
+        BUILD_VARIANTS+=(ksu-susfs-nomount ksu-next-susfs-nomount)
+
+	SHORT_SHA="${NEW_NOMOUNT:0:7}"
+
+cat >>"$NOTES_FILE" <<EOF
+###NoMount
+
+- ${SHORT_SHA} — ${NOMOUNT_MSG}
 
 EOF
     fi
@@ -238,6 +259,7 @@ fi
     echo "ksu_sha=$NEW_KSU"
     echo "next_sha=$NEW_NEXT"
     echo "susfs_sha=$NEW_SUSFS"
+	echo "nomount_sha=$NEW_NOMOUNT"
     echo "release_notes<<EOF"
     cat "$NOTES_FILE"
     echo "EOF"

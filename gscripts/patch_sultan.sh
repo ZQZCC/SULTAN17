@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
 if [ $# -ne 2 ]; then
-    echo "Usage: $0 <gs201|zuma|zumapro> <stock|ksu|ksu-susfs|ksu-next|ksu-next-susfs"
+    echo "Usage: $0 <gs201|zuma|zumapro> <ksu-susfs|ksu-susfs-nomount|ksu-next-susfs|ksu-next-susfs-nomount"
     exit 1
 fi
 
@@ -34,25 +34,17 @@ case "$1" in
 esac
 
 case "$2" in
-    stock|ksu|ksu-susfs|ksu-next|ksu-next-susfs)
+    ksu-susfs|ksu-susfs-nomount|ksu-next-susfs|ksu-next-susfs-nomount)
         VARIANT="$2"
         ;;
     *)
         echo "Error: '$2' is not a valid variant."
-        echo "Usage: $0 <gs201|zuma|zumapro> <stock|ksu|ksu-susfs|ksu-next|ksu-next-susfs"
+        echo "Usage: $0 <gs201|zuma|zumapro> <ksu-susfs|ksu-susfs-nomount|ksu-next-susfs|ksu-next-susfs-nomount"
         exit 1
         ;;
 esac
 
 ######################################################
-
-######################################################
-# VARIABLES
-######################################################
-
-readonly KERNEL_REPO="${REPO_ROOT}"
-readonly PATCHES_REPO="https://github.com/Ante0/kernel_patches"
-
 ######################################################
 
 ######################################################
@@ -69,6 +61,15 @@ clone_anykernel() {
 		AnyKernel
 }
 
+clone_sultan_patches() {
+        msg "Cloning sultan patches"
+
+        git clone \
+                --depth=1 \
+                "${PATCHES2_REPO}" \
+                sultan_patches
+}
+
 clone_kernel_patches() {
 	msg "Cloning kernel patches"
 
@@ -77,6 +78,27 @@ clone_kernel_patches() {
 		"${PATCHES_REPO}" \
 		kernel_patches
 }
+
+clone_nomount() {
+	msg "Cloning Nomount"
+
+	setup_script="$(mktemp)"
+    trap 'rm -f "$setup_script"' RETURN
+
+    curl \
+        --fail \
+        --location \
+        --silent \
+        --show-error \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-all-errors \
+        "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh" \
+        -o "$setup_script"
+
+    bash "$setup_script" "$NOMOUNT_BRANCH"
+
+	}
 
 clone_susfs() {
 	msg "Cloning SUSFS"
@@ -88,27 +110,51 @@ clone_susfs() {
 }
 
 install_ksu() {
-	msg "Cloning KernelSU"
+    msg "Cloning KernelSU"
 
-	curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+    local setup_script
+    setup_script="$(mktemp)"
+    trap 'rm -f "$setup_script"' RETURN
+
+    curl \
+        --fail \
+        --location \
+        --silent \
+        --show-error \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-all-errors \
+        "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" \
+        -o "$setup_script"
+
+    bash "$setup_script" "$KSU_BRANCH"
 }
 
 install_ksu_next() {
-	msg "Cloning KernelSU-Next"
+    msg "Cloning KernelSU-Next"
 
-	curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+    local setup_script
+    setup_script="$(mktemp)"
+    trap 'rm -f "$setup_script"' RETURN
+
+    curl \
+        --fail \
+        --location \
+        --silent \
+        --show-error \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-all-errors \
+		"https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
+        -o "$setup_script"
+
+    bash "$setup_script" "$KSU_NEXT_BRANCH"
 }
 
 patch_utf8() {
 	msg "Patching UTF8"
 
 	patch -p1 < "$KERNEL_REPO"/kernel_patches/common/unicode_bypass_fix_6.1+.patch || true
-}
-
-patch_scopemin() {
-	msg "Patching Scope Min 1.6"
-
-	patch -p1 < "$KERNEL_REPO"/kernel_patches/next/scope_min_manual_hooks_v1.6.patch || true
 }
 
 apply_patch() {
@@ -195,29 +241,34 @@ patch_susfs_ksu_next() {
         apply_patch_optional \
                 "$KERNEL_REPO/KernelSU-Next" \
                 "$KERNEL_REPO/kernel_patches/next/susfs_fix_patches/v2.2.0/overwrite_hook_mode.patch"
+
 }
 
 patch_sultan() {
-	msg "Applying Sultan specific patches (fs/open.c, fs/namespace.c and kernel/sys.c)"
+	msg "Applying Sultan specific patches (fs/namespace.c and kernel/sys.c)"
 	apply_patch_optional \
 		"$KERNEL_REPO" \
-		"$KERNEL_REPO/kernel_patches/sultan/fixer.patch"
+		"$KERNEL_REPO/sultan_patches/fixer.patch"
+}
+
+patch_nomount() {
+        msg "Applying NoMount hook patches (nomount.c, fs/proc/inode.c, include/linux/proc_fs.h"
+        apply_patch_optional \
+                "$KERNEL_REPO/NoMount" \
+                "$KERNEL_REPO/sultan_patches/sultan/nomount-sultan-patch_b275.patch"
+
+	apply_patch_optional \
+                "$KERNEL_REPO" \
+                "$KERNEL_REPO/sultan_patches/sultan/nomount-sultan-proc-hook.patch"
 }
 
 ######################################################
 
 #clone kernel_patches
 clone_kernel_patches
+clone_sultan_patches
 
 case "$VARIANT" in
-    stock)
-        ;;
-    ksu)
-        install_ksu
-	patch_scopemin
-	patch_utf8
-	msg "$TARGET $VARIANT done"
-        ;;
     ksu-susfs)
 	install_ksu
 	clone_susfs
@@ -226,12 +277,15 @@ case "$VARIANT" in
 	patch_sultan
 	msg "$TARGET $VARIANT done"
         ;;
-    ksu-next)
-        install_ksu_next
-	patch_scopemin
+	ksu-susfs-nomount)
+	install_ksu
+	clone_susfs
 	patch_utf8
-	echo "$TARGET $VARIANT done"
-        ;;
+	patch_susfs_ksu
+	patch_sultan
+	clone_nomount
+	msg "$TARGET $VARIANT done"
+		;;
     ksu-next-susfs)
 	install_ksu_next
 	clone_susfs
@@ -240,27 +294,38 @@ case "$VARIANT" in
 	patch_sultan
 	echo "$TARGET $VARIANT done"
         ;;
+	ksu-next-susfs-nomount)
+	install_ksu_next
+	clone_susfs
+	patch_utf8
+	patch_susfs_ksu_next
+	patch_sultan
+	clone_nomount
+	echo "$TARGET $VARIANT done"
+        ;;
 esac
 
 ##Patch Defconfig##
 
 DEFCONFIG="$KERNEL_REPO/arch/arm64/configs/${TARGET}_defconfig"
 
-if [[ "$VARIANT" != "stock" ]]; then
 #KSU
-        if ! grep -q "^CONFIG_KSU=y$" "$DEFCONFIG"; then
-                echo "CONFIG_KSU=y" >> "$DEFCONFIG"
-        fi
+if ! grep -q "^CONFIG_KSU=y$" "$DEFCONFIG"; then
+        echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+fi
 
-#SUS_SU
-        if [[ "$VARIANT" == *"-susfs" ]]; then
-                if ! grep -q "^CONFIG_KSU_SUSFS_SUS_SU=n$" "$DEFCONFIG"; then
-                        echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$DEFCONFIG"
+#SUSFS
+if ! grep -q "^CONFIG_KSU_SUSFS_SUS_SU=n$" "$DEFCONFIG"; then
+        echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$DEFCONFIG"
+fi
+if ! grep -q "^CONFIG_KSU_SUSFS=y$" "$DEFCONFIG"; then
+        echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+fi
+
+if [[ "$VARIANT" == *"-nomount" ]]; then
+                if ! grep -q "^CONFIG_NOMOUNT=y$" "$DEFCONFIG"; then
+                        echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
                 fi
-                if ! grep -q "^CONFIG_KSU_SUSFS=y$" "$DEFCONFIG"; then
-                        echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
-                fi
-	fi
 fi
 
 ##fetch anykernel

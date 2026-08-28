@@ -15,6 +15,8 @@ CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 readonly REPO_ROOT="$(cd "${CONFIG_DIR}/.." && pwd)"
 
+readonly KERNEL_REPO="${REPO_ROOT}"
+
 ###############################################################################
 # Toolchain
 ###############################################################################
@@ -45,11 +47,10 @@ readonly TARGETS=(
 )
 
 readonly VARIANTS=(
-    stock
-    ksu
     ksu-susfs
-    ksu-next
+    ksu-susfs-nomount
     ksu-next-susfs
+    ksu-next-susfs-nomount
 )
 
 ###############################################################################
@@ -77,6 +78,12 @@ readonly SUSFS_BRANCH="gki-android14-6.1"
 
 readonly ANYKERNEL_REPO="https://github.com/Ante0/AnyKernel3"
 readonly ANYKERNEL_BRANCH_PREFIX="sultan-17"
+
+readonly PATCHES_REPO="https://github.com/Ante0/kernel_patches"
+readonly PATCHES2_REPO="https://github.com/Ante0/fix_patches"
+
+readonly NOMOUNT_REPO="https://github.com/maxsteeel/nomount"
+readonly NOMOUNT_BRANCH="dev"
 
 ###############################################################################
 # Release
@@ -116,7 +123,7 @@ require_variant() {
     local variant="$1"
 
     [[ " ${VARIANTS[*]} " == *" ${variant} "* ]] \
-        || die "Unknown variant: ${variant}"
+        || die "Unknown varian: ${variant}"
 }
 
 ###############################################################################
