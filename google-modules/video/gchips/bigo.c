@@ -720,6 +720,7 @@ static int bigo_worker_thread(void *data)
 			continue;
 
 		inst = container_of(job, struct bigo_inst, job);
+		bool is_secure = READ_ONCE(inst->is_secure);
 
 		if (inst->idle) {
 			inst->idle = false;
@@ -727,7 +728,7 @@ static int bigo_worker_thread(void *data)
 		}
 
 		bigo_update_qos(core);
-		if (inst->is_secure) {
+		if (is_secure) {
 			rc = exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
 					SMC_PROTECTION_ENABLE);
 			if (rc) {
@@ -738,7 +739,7 @@ static int bigo_worker_thread(void *data)
 
 		rc = bigo_run_job(core, job);
 
-		if (inst->is_secure) {
+		if (is_secure) {
 			if (exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
 					SMC_PROTECTION_DISABLE))
 				pr_err("failed to disable SMC_PROTECTION_SET: %d\n", rc);
